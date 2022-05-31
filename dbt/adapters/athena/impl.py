@@ -11,6 +11,7 @@ from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.athena import AthenaConnectionManager
 from dbt.adapters.athena.relation import AthenaRelation
 from dbt.events import AdapterLogger
+from dbt.adapters.athena.utils import get_boto3_session
 
 logger = AdapterLogger("Athena")
 
@@ -111,3 +112,44 @@ class AthenaAdapter(SQLAdapter):
     @available
     def quote_seed_column(self, column: str, quote_config: Optional[bool]) -> str:
         return super().quote_seed_column(column, False)
+
+    def split_s3_path(self, s3_path):
+        splitter = s3_path.replace("s3://", "").split("/")
+        bucket = splitter.pop(0)
+        prefix = "/".join(splitter)
+        return bucket, prefix
+
+    def s3_path_exists(self, s3_path, s3_client):
+        bucket, prefix = self.split_s3_path(s3_path)
+        result = s3_client.list_objects(Bucket=bucket, Prefix=prefix)
+        return True if "Contents" in result else False
+
+    @available
+    def get_creds(self):
+        conn = self.connections.get_thread_connection()
+        creds = conn.credentials
+        return creds
+
+    @available
+    def delete_s3_object(self, s3_path):
+        bucket, prefix = self.split_s3_path(s3_path)
+
+        creds = self.get_creds()
+        boto3_session = get_boto3_session(creds.region_name, creds.aws_profile_name)
+        s3_client = boto3_session.client("s3")
+        s3_resource = boto3_session.resource("s3")
+
+        if self.s3_path_exists(s3_path, s3_client):
+            logger.info(f"Delete objects from bucket={bucket}, prefix={prefix}")
+            s3_resource.Bucket(bucket).objects.filter(Prefix=prefix).delete()
+
+    @available
+    def s3_table_location(self, schema_name: str, table_name: str) -> str:
+        creds = self.get_creds()
+        if creds.s3_data_dir is not None:
+            s3_path = creds.s3_data_dir.format(
+                schema_name=schema_name, table_name=table_name
+            )
+            return s3_path
+        else:
+            raise ValueError("s3_data_dir is required for the profile config")
