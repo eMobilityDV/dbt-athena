@@ -70,13 +70,13 @@ class AthenaAdapter(SQLAdapter):
     @available
     def s3_table_location(self, schema_name: str, table_name: str) -> str:
         creds = self.get_creds()
-        if creds.s3_data_dir is not None:
-            s3_path = creds.s3_data_dir.format(
+        if creds.external_location is not None:
+            s3_path = creds.external_location.format(
                 schema_name=schema_name, table_name=table_name
             )
             return s3_path
         else:
-            raise ValueError("s3_data_dir is required for the profile config")
+            raise ValueError("external location is required for the profile config")
 
     @available
     def clean_up_partitions(
