@@ -38,6 +38,7 @@ class AthenaCredentials(Credentials):
     endpoint_url: Optional[str] = None
     work_group: Optional[str] = None
     aws_profile_name: Optional[str] = None
+    external_location: Optional[str] = None
     poll_interval: float = 1.0
     _ALIASES = {"catalog": "database"}
     num_retries: Optional[int] = 5
@@ -51,7 +52,17 @@ class AthenaCredentials(Credentials):
         return self.host
 
     def _connection_keys(self) -> Tuple[str, ...]:
-        return "s3_staging_dir", "work_group", "region_name", "database", "schema", "poll_interval", "aws_profile_name", "endpoing_url"
+        return (
+            "s3_staging_dir",
+            "work_group",
+            "region_name",
+            "database",
+            "schema",
+            "poll_interval",
+            "aws_profile_name",
+            "endpoing_url",
+            "external_location",
+        )
 
 
 class AthenaCursor(Cursor):
@@ -139,6 +150,7 @@ class AthenaConnectionManager(SQLConnectionManager):
 
             handle = AthenaConnection(
                 s3_staging_dir=creds.s3_staging_dir,
+                external_location=creds.external_location,
                 endpoint_url=creds.endpoint_url,
                 region_name=creds.region_name,
                 schema_name=creds.schema,
@@ -161,9 +173,10 @@ class AthenaConnectionManager(SQLConnectionManager):
             connection.handle = handle
 
         except Exception as e:
-            logger.debug("Got an error when attempting to open a Athena "
-                         "connection: '{}'"
-                         .format(e))
+            logger.debug(
+                "Got an error when attempting to open a Athena "
+                "connection: '{}'".format(e)
+            )
             connection.handle = None
             connection.state = "fail"
 
@@ -181,7 +194,7 @@ class AthenaConnectionManager(SQLConnectionManager):
         return AdapterResponse(
             _message="{} {}".format(code, cursor.rowcount),
             rows_affected=cursor.rowcount,
-            code=code
+            code=code,
         )
 
     def cancel(self, connection: Connection):
@@ -206,9 +219,7 @@ class AthenaParameterFormatter(Formatter):
             mappings=deepcopy(_DEFAULT_FORMATTERS), default=None
         )
 
-    def format(
-        self, operation: str, parameters: Optional[List[str]] = None
-    ) -> str:
+    def format(self, operation: str, parameters: Optional[List[str]] = None) -> str:
         if not operation or not operation.strip():
             raise ProgrammingError("Query is none or empty.")
         operation = operation.strip()
@@ -239,4 +250,8 @@ class AthenaParameterFormatter(Formatter):
                     "Unsupported parameter "
                     + "(Support for list only): {0}".format(parameters)
                 )
-        return (operation % tuple(kwargs)).strip() if kwargs is not None else operation.strip()
+        return (
+            (operation % tuple(kwargs)).strip()
+            if kwargs is not None
+            else operation.strip()
+        )
