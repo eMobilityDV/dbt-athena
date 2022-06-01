@@ -63,6 +63,7 @@ class AthenaAdapter(SQLAdapter):
         s3_client = boto3_session.client("s3")
         s3_resource = boto3_session.resource("s3")
 
+        logger.info("We love dbt")
         if self.s3_path_exists(s3_path, s3_client):
             logger.info(f"Delete objects from bucket={bucket}, prefix={prefix}")
             s3_resource.Bucket(bucket).objects.filter(Prefix=prefix).delete()
